@@ -63,7 +63,7 @@ def edit_torrent(
     new_trackers: Union[tuple, list] = (),
     old_trackers: Union[tuple, list, None] = (),
     replace: bool = False,
-) -> dict:
+) -> Union[dict, None]:
     """Modify the privacy flag and tracker list of a torrent
 
     .. raises:: ValueError
@@ -79,10 +79,24 @@ def edit_torrent(
         except if replace keyword is True. In this case all the existing trackers
         will be replaced.
     :key old_trackers: List of old trackers to remove from the torrent metadata.
+        If no tracker is found, the torrent will NOT be processed at all.
+        This option takes precedence over :meth:`private`.
     :key replace: If True, the existing tracker list is replaced entirely with
         :meth:`new_trackers`.
     :return: The modified deserialized torrent metadata structure.
+        Return None if the torrent is not modified.
     """
+    torrent_list = (
+        torrent_file["announce-list"]
+        if "announce-list" in torrent_file
+        else [torrent_file["announce"]]
+    )
+    LOGGER.debug("Existing trackers: %s", ", ".join(torrent_list))
+
+    if old_trackers and not set(torrent_list) & set(old_trackers):
+        LOGGER.debug("Trackers don't match: do not process this torrent!")
+        return
+
     if private is not None:
         LOGGER.debug("Toggle private attribute: %s", private)
         torrent_file["info"]["private"] = int(private)
@@ -92,16 +106,9 @@ def edit_torrent(
         return torrent_file
 
     # Set operation shenanigans
-    torrent_list = (
-        torrent_file["announce-list"]
-        if "announce-list" in torrent_file
-        else [torrent_file["announce"]]
-    )
-    LOGGER.debug("Existing trackers: %s", ", ".join(torrent_list))
-
     if new_trackers:
         if not replace:
-            # NOTE: can duplicate items
+            # NOTE: can duplicate items, but keep the order
             torrent_list += new_trackers
         else:
             torrent_list = new_trackers
@@ -124,14 +131,18 @@ def edit_torrent(
     return torrent_file
 
 
-def write_torrent(filepath: str, torrent_file: dict) -> None:
+def write_torrent(filepath: str, torrent_file: Union[dict, None]) -> None:
     """Write a modified torrent file to disk
 
     The original file is backed up before writing.
 
     :param filepath: Path to the torrent file.
-    :param torrent_file: The modified deserialized torrent metadata structure.
+    :param torrent_file: The modified deserialized torrent metadata structure,
+        or None if the torrent should not be modified.
     """
+    if not torrent_file:
+        return
+
     data = bencode(torrent_file)
 
     # Make a backup
@@ -175,7 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--remove",
         nargs="+",
         metavar="URL",
-        help="Remove all trackers with the provided list",
+        help="Remove all trackers with the provided list. "
+            "If no tracker is found, the file will be skipped, even if private is set.",
     )
 
     parser.add_argument(
