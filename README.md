@@ -1,6 +1,6 @@
 
-
 A small command-line tool to modify BitTorrent `.torrent` files.
+
 This tool is designed to perform simple metadata edits without recreating the torrent.
 
 ---
@@ -136,8 +136,8 @@ allow you to toggle the private flag.
 Example:
     
 ```bash
-    cd /var/lib/transmission-daemon/info/torrents
-    sudo transmission-edit -r "old_url" "new_url" *.torrent
+cd /var/lib/transmission-daemon/info/torrents
+sudo transmission-edit -r "old_url" "new_url" *.torrent
 ```
 
 ## Contributions
