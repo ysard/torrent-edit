@@ -50,7 +50,8 @@ options:
   --private             Set the torrent as private (disable DHT/PEX)
   --add URL [URL ...]   Add all trackers with the provided list
   --remove URL [URL ...]
-                        Remove all trackers with the provided list
+                        Remove all trackers with the provided list.
+                        If no tracker is found, the file will be skipped, even if private is set.
   --replace URL [URL ...]
                         Replace all trackers with the provided list
   -v, --verbose         Enable verbose output (debug logging)
