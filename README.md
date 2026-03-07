@@ -15,6 +15,12 @@ This tool is designed to perform simple metadata edits without recreating the to
 
 ## Installation
 
+### From pypi
+
+```bash
+pip install torrent-edit
+```
+
 ### From source
 
 ```bash
