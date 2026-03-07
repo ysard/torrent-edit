@@ -116,17 +116,18 @@ This removes all existing trackers and replaces them with the provided ones.
 
 ## How to use in real life (GNU/Linux)
 
-- Stop the client service (Transmission, qBittorrent, etc.)
+- Stop the BitTorrent service or application (Transmission, qBittorrent, etc.)
 
-- Find the directory of the torrents used by the client, and go into it.
+- Find the directory with the torrents used by your application, and go into it.
 
-For Transmission: `/var/lib/transmission-daemon/info/torrents`
+    - For Transmission server: `/var/lib/transmission-daemon/info/torrents`
+    - For Transmission client: `~/.config/transmission/torrents/`
 
 - Execute the script with your own arguments.
 
-- Restart the service
+- If you are using a simple client, just restart it, it's done.
 
-- Reload the torrents with the remote administration tool.
+- If you are using Transmission server, restart the service and reload the torrents with the remote administration tool.
 
 ```bash
 sudo find . -iname "*.torrent" -exec transmission-remote 127.0.0.1:9091 -n transmission_login:transmission_pass -a {} \;
