@@ -80,6 +80,13 @@ $ torrent-edit movie.torrent --public
 
 Removes the private flag.
 
+> ⚠️ **Notice**
+> By doing this, you are changing the torrent's hash. The file will therefore be different
+> for the network, and your old peers will no longer be able to find you.
+> However, you may have two torrents pointing to the same file, and the hash obtained is
+> exactly the same as the hash that would have been obtained if the torrent had been
+> generated from the start with this option.
+
 - Add a tracker
 
 ```bash
