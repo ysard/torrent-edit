@@ -215,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         metavar="URL",
         help="Remove all trackers with the provided list. "
-            "If no tracker is found, the file will be skipped, even if private is set.",
+        "If no tracker is found, the file will be skipped, even if private is set.",
     )
 
     parser.add_argument(
@@ -257,10 +257,7 @@ def main():
 
     # Handle jokers & multiple files
     filepaths = it.chain(
-        *(
-            filepath.parent.glob(filepath.name)
-            for filepath in map(Path, args.torrents)
-        )
+        *(filepath.parent.glob(filepath.name) for filepath in map(Path, args.torrents))
     )
     for filepath in filepaths:
         torrent_file, original_hash = open_torrent(filepath)
