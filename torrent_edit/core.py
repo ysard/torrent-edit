@@ -40,6 +40,15 @@ def setup_logging(verbose: bool = False):
     )
 
 
+def get_torrent_hash(torrent_file: dict) -> str:
+    """Get the unique hash info field of the given torrent
+
+    :param torrent_file: A deserialized torrent structure.
+    """
+    raw_info_hash = bencode(torrent_file["info"])
+    return hashlib.sha1(raw_info_hash).hexdigest()
+
+
 def open_torrent(filepath: str) -> dict:
     """Load and deserialize a .torrent file
 
