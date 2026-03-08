@@ -48,6 +48,7 @@ options:
   -h, --help            show this help message and exit
   --public              Remove the private flag
   --private             Set the torrent as private (disable DHT/PEX)
+  --rename              Rename the torrent file if the hash has changed (if the privacy flag has been toggled)
   --add URL [URL ...]   Add all trackers with the provided list
   --remove URL [URL ...]
                         Remove all trackers with the provided list.
@@ -81,12 +82,20 @@ $ torrent-edit movie.torrent --public
 
 Removes the private flag.
 
-> ⚠️ **Notice**
+> ⚠️ **Notice:**
 > By doing this, you are changing the torrent's hash. The file will therefore be different
 > for the network, and your old peers will no longer be able to find you.
 > However, you may have two torrents pointing to the same file, and the hash obtained is
 > exactly the same as the hash that would have been obtained if the torrent had been
 > generated from the start with this option.
+
+> ⚠️ **Notice:**
+> When doing this, you may need to update the path to the file in your application.
+> This is because the torrent client treats it as a new pending download.
+
+Use the `--rename` parameter to avoid editing the torrent in place and instead create a new file alongside it.
+This can be useful if you are working with torrents that are already active in Transmission (see later for the concerned folders).
+All new files should be added automatically when the software is restarted.
 
 - Add a tracker
 
@@ -135,7 +144,8 @@ This removes all existing trackers and replaces them with the provided ones.
 
 - If you are using a simple client, just restart it, it's done.
 
-- If you are using Transmission server, restart the service and reload the torrents with the remote administration tool.
+- If you are using Transmission server, you *may* have to restart the service and
+reload the torrents with the remote administration tool.
 
 ```bash
 sudo find . -iname "*.torrent" -exec transmission-remote 127.0.0.1:9091 -n transmission_login:transmission_pass -a {} \;
