@@ -49,21 +49,18 @@ def get_torrent_hash(torrent_file: dict) -> str:
     return hashlib.sha1(raw_info_hash).hexdigest()
 
 
-def open_torrent(filepath: str) -> dict:
+def open_torrent(filepath: Path) -> tuple[dict, str]:
     """Load and deserialize a .torrent file
 
     :param filepath: Path to the torrent file.
-    :return: The deserialized torrent metadata structure.
+    :return: The deserialized torrent metadata structure and its hash.
     """
-    with open(filepath, "rb") as file:
-        torrent_file = bdecode(file)
+    torrent_file = bdecode(filepath.read_bytes())
 
-    raw_info_hash = bencode(torrent_file["info"])
-    info_hash = hashlib.sha1(raw_info_hash).hexdigest()
-
+    info_hash = get_torrent_hash(torrent_file)
     LOGGER.info("Process %s (hash: %s)", Path(filepath).name, info_hash)
 
-    return torrent_file
+    return torrent_file, info_hash
 
 
 def edit_torrent(
@@ -106,13 +103,18 @@ def edit_torrent(
         LOGGER.debug("Trackers don't match: do not process this torrent!")
         return
 
-    if private is not None:
-        LOGGER.debug("Toggle private attribute: %s", private)
+    private_flag = torrent_file["info"]["private"]
+    hash_modified = False
+    if private is not None and private_flag != private:
+        LOGGER.debug("Toggle private attribute: %s->%s", private_flag, int(private))
         torrent_file["info"]["private"] = int(private)
+        hash_modified = True
 
     if all(param is None for param in (new_trackers, old_trackers)):
         # Nothing to do about trackers
-        return torrent_file
+        if hash_modified:
+            return torrent_file
+        return
 
     # Set operation shenanigans
     if new_trackers:
@@ -140,7 +142,12 @@ def edit_torrent(
     return torrent_file
 
 
-def write_torrent(filepath: str, torrent_file: Union[dict, None]) -> None:
+def write_torrent(
+    filepath: Path,
+    torrent_file: Union[dict, None],
+    original_hash: str,
+    rename: bool = False,
+) -> None:
     """Write a modified torrent file to disk
 
     The original file is backed up before writing.
@@ -148,17 +155,23 @@ def write_torrent(filepath: str, torrent_file: Union[dict, None]) -> None:
     :param filepath: Path to the torrent file.
     :param torrent_file: The modified deserialized torrent metadata structure,
         or None if the torrent should not be modified.
+    :param original_hash: Hash of the torrent before any modification.
+    :key rename: Rename the file if the hash has changed (private flag toggled).
     """
     if not torrent_file:
+        LOGGER.debug("Nothing has changed: do not process this torrent!")
         return
 
-    data = bencode(torrent_file)
+    current_hash = get_torrent_hash(torrent_file)
+    if rename and current_hash != original_hash:
+        filepath = filepath.parent / (current_hash + filepath.suffix)
+        LOGGER.debug("Torrent file has been renamed (new hash: %s)", current_hash)
+    else:
+        # Make a backup
+        shutil.copy2(filepath, str(filepath) + ".bak")
+        LOGGER.debug("Torrent is modified in place!")
 
-    # Make a backup
-    shutil.copy2(filepath, str(filepath) + ".bak")
-
-    with open(filepath, "wb") as file:
-        file.write(data)
+    filepath.write_bytes(bencode(torrent_file))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,6 +195,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--private",
         help="Set the torrent as private (disable DHT/PEX)",
         action="store_true",
+    )
+
+    parser.add_argument(
+        "--rename",
+        action="store_true",
+        help="Rename the torrent file if the hash has changed (if the privacy flag has been toggled)",
     )
 
     parser.add_argument(
@@ -244,15 +263,19 @@ def main():
         )
     )
     for filepath in filepaths:
+        torrent_file, original_hash = open_torrent(filepath)
+
         write_torrent(
             filepath,
             edit_torrent(
-                open_torrent(filepath),
+                torrent_file,
                 private=private,
                 new_trackers=new_trackers,
                 old_trackers=old_trackers,
                 replace=replace,
             ),
+            original_hash,
+            rename=args.rename,
         )
 
 
