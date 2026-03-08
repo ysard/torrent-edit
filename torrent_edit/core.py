@@ -101,7 +101,7 @@ def edit_torrent(
 
     if old_trackers and not set(torrent_list) & set(old_trackers):
         LOGGER.debug("Trackers don't match: do not process this torrent!")
-        return
+        return None
 
     private_flag = torrent_file["info"]["private"]
     hash_modified = False
@@ -114,7 +114,7 @@ def edit_torrent(
         # Nothing to do about trackers
         if hash_modified:
             return torrent_file
-        return
+        return None
 
     # Set operation shenanigans
     if new_trackers:
