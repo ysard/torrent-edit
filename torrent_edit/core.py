@@ -282,7 +282,7 @@ def write_torrent(
     resume_filepath: Union[Path, None],
     torrent_file: Union[dict, None],
     original_hash: str,
-    rename: bool = False,
+    inplace: bool = False,
 ) -> None:
     """Write a modified torrent file to disk
 
@@ -293,20 +293,27 @@ def write_torrent(
     :param torrent_file: The modified deserialized torrent metadata structure,
         or None if the torrent should not be modified.
     :param original_hash: Hash of the torrent before any modification.
-    :key rename: Rename the file if the hash has changed (private flag toggled).
+    :key inplace: If True modify the torrent inplace even if the hash has changed
+        (privacy flag toggled). Otherwise, a new torrent is created next to the old one,
+        as is the .resume or .fastresume file if it is found in :meth:`resume_filepath`.
     """
     if not torrent_file:
         LOGGER.debug("Nothing has changed: do not process this torrent!")
         return
 
     current_hash = get_torrent_hash(torrent_file)
-    if rename and current_hash != original_hash:
+
+    if not inplace and current_hash != original_hash:
         filepath = filepath.parent / (current_hash + filepath.suffix)
         LOGGER.debug("Torrent file has been renamed (new hash: %s)", current_hash)
     else:
         # Make a backup
         shutil.copy2(filepath, str(filepath) + ".bak")
         LOGGER.debug("Torrent is modified in place!")
+
+    if not inplace or current_hash == original_hash:
+        # Always sync resume for qBittorrent, if inplace is False otherwise.
+        sync_resume_file(resume_filepath, torrent_file, original_hash, current_hash)
 
     filepath.write_bytes(bencode(torrent_file))
 
@@ -344,9 +351,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--rename",
+        "--inplace",
         action="store_true",
-        help="Rename the torrent file if the hash has changed (if the privacy flag has been toggled)",
+        help="Modify the torrent inplace even if the hash has changed "
+        "instead of recreating it (if the privacy flag has been toggled)(not recommended)",
     )
 
     parser.add_argument(
@@ -429,7 +437,7 @@ def main():
                 replace=replace,
             ),
             original_hash,
-            rename=args.rename,
+            inplace=args.inplace,
         )
 
 
