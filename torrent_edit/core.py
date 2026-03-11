@@ -22,6 +22,7 @@ import shutil
 import argparse
 import logging
 import itertools as it
+from binascii import unhexlify
 
 # Custom imports
 from bcoding import bdecode, bencode
@@ -65,6 +66,7 @@ def open_torrent(filepath: Path) -> tuple[dict, str]:
 
 def edit_torrent(
     torrent_file: dict,
+    resume_file: Union[dict, None],
     private: Union[bool, None] = False,
     new_trackers: Union[tuple, list] = (),
     old_trackers: Union[tuple, list, None] = (),
@@ -76,6 +78,7 @@ def edit_torrent(
         If the resulting torrent would contain no trackers.
 
     :param torrent_file: A deserialized torrent structure.
+    :param resume_file: The deserialized .resume or .fastresume structure.
     :key private: Whether to set the torrent as private.
         Private torrents disable DHT, PEX and LSD in most BitTorrent clients.
         (default: False)
@@ -92,14 +95,34 @@ def edit_torrent(
     :return: The modified deserialized torrent metadata structure.
         Return None if the torrent is not modified.
     """
-    torrent_list = (
-        torrent_file["announce-list"]
-        if "announce-list" in torrent_file
-        else [torrent_file["announce"]]
-    )
+    try:
+        torrent_list = (
+            torrent_file["announce-list"]
+            if "announce-list" in torrent_file
+            else [torrent_file["announce"]]
+        )
+    except KeyError:
+        torrent_list = []
+        LOGGER.debug("Announce not found.")
+
+        if not resume_file:
+            LOGGER.debug(
+                "Announce not found. Are you trying to edit qBittorrent files ? "
+                "Please provide the path to the fastresume files with --resume_path."
+            )
+
+    if resume_file:
+        # Merge torrent_list with trackers in the resume file (qBittorrent)
+        # Yeah it's a list of list...
+        torrent_list += resume_file.get("trackers", [[]])[0]
+
+    torrent_list = set(torrent_list)
+    old_trackers = set(old_trackers) if old_trackers else set()
+    new_trackers = set(new_trackers) if new_trackers else set()
+
     LOGGER.debug("Existing trackers: %s", ", ".join(torrent_list))
 
-    if old_trackers and not set(torrent_list) & set(old_trackers):
+    if old_trackers and not torrent_list & old_trackers:
         LOGGER.debug("Trackers don't match: do not process this torrent!")
         return None
 
@@ -119,18 +142,20 @@ def edit_torrent(
     # Set operation shenanigans
     if new_trackers:
         if not replace:
-            # NOTE: can duplicate items, but keep the order
-            torrent_list += new_trackers
+            torrent_list |= new_trackers
         else:
             torrent_list = new_trackers
 
     if old_trackers:
-        torrent_list = list(set(torrent_list) - set(old_trackers))
+        torrent_list = torrent_list - old_trackers
+
+    torrent_list = list(torrent_list)
 
     if not torrent_list:
-        raise ValueError("Tracker list would become empty.")
-
-    torrent_file["announce"] = torrent_list[0]
+        del torrent_file["announce"]
+        # raise ValueError("Tracker list would become empty.")
+    else:
+        torrent_file["announce"] = torrent_list[0]
 
     if len(torrent_list) > 1:
         torrent_file["announce-list"] = torrent_list
@@ -142,8 +167,119 @@ def edit_torrent(
     return torrent_file
 
 
+def copy_qb_fastresume(
+    fastresume_filepath: Path, torrent_file: dict, current_hash: str
+):
+    """Update hash of qBittorrent's .fastresume file if required, update tracker list
+
+    :param fastresume_filepath: Path of a .fastresume file.
+    :param torrent_file: The modified deserialized torrent metadata structure;
+    :param current_hash: Hash of the torrent after the modifications.
+    """
+    resume_file = bdecode(fastresume_filepath.read_bytes())
+
+    # original_hash = hexlify(resume_file["info-hash"]).decode()
+
+    # Inject the new hash (cast to bytes)
+    raw_hash = unhexlify(current_hash.encode())
+    resume_file["info-hash"] = raw_hash
+
+    # Inject the trackers
+    LOGGER.debug("Fastresume old trackers: %s", resume_file["trackers"])
+
+    try:
+        pending_trackers = torrent_file.get("announce-list", [torrent_file["announce"]])
+    except KeyError:
+        pending_trackers = []
+
+    LOGGER.debug("Fastresume pending trackers: %s", pending_trackers)
+    resume_file["trackers"] = [pending_trackers]
+
+    # Save
+    Path(fastresume_filepath.with_stem(current_hash)).write_bytes(bencode(resume_file))
+
+
+def open_resume_file(
+    original_hash: str, resume_path: Union[Path, None]
+) -> Union[tuple[None, None], tuple[dict, Path]]:
+    """Try to find & open the corresponding .resume or .fastresume file given the torrent's hash
+
+    :param original_hash: Hash of the torrent before any modification.
+    :param resume_path: Path for the .resume or .fastresume files (can be None).
+    :return: The deserialized .resume or .fastresume structure and its file path.
+        Return a `(None, None)` structure if the file was not found.
+    """
+    if not resume_path:
+        return None, None
+
+    resume_filepath = find_resume_file(original_hash, resume_path)
+    if not resume_filepath:
+        return None, None
+    return bdecode(resume_filepath.read_bytes()), resume_filepath
+
+
+def find_resume_file(original_hash: str, resume_path: Union[Path, None]) -> None:
+    """Try to get the corresponding .resume or .fastresume file given the torrent's hash
+
+    :param original_hash: Hash of the torrent before any modification.
+    :param resume_path: Path for the .resume or .fastresume files (can be None).
+    :return: The file path of the .resume or .fastresume file.
+    """
+    if not resume_path:
+        return None
+
+    files = list(resume_path.glob(original_hash + ".*resume"))
+    if not files:
+        LOGGER.warning("Resume file not found!")
+        return None
+    if len(files) > 1:
+        LOGGER.error("More than 1 resume file?")
+        return None
+
+    return files[0]
+
+
+def sync_resume_file(
+    resume_filepath: Union[Path, None],
+    torrent_file: dict,
+    original_hash: str,
+    current_hash: str,
+):
+    """Sync torrent stats when the hash has changed or also sync trackers for qBittorrent
+
+    .. note::
+        - qBittorrent stores the trackers in use in the .fastresume file.
+        - Transmission stores the trackers in use in the .torrent file itself;
+        thus it is not handled here. The .resume file is just copied and renamed
+        in order to sync stats.
+
+    :param resume_filepath: Path of a .resume or .fastresume file (can be None).
+    :param torrent_file: The modified deserialized torrent metadata structure;
+    :param original_hash: Hash of the torrent before any modification.
+    :param current_hash: Hash of the torrent after the modifications.
+    """
+    if not resume_filepath:
+        LOGGER.warning("Resume file not provided")
+        return
+
+    match resume_filepath.suffix:
+        case ".resume":
+            LOGGER.debug("Sync resume: Transmission format")
+            if original_hash != current_hash:
+                shutil.copy2(resume_filepath, resume_filepath.with_stem(current_hash))
+        case ".fastresume":
+            LOGGER.debug("Sync resume: qBittorrent format")
+            copy_qb_fastresume(resume_filepath, torrent_file, current_hash)
+        case _:
+            LOGGER.error("Sync resume: Unknown format (%s)", resume_filepath.suffix)
+            return
+
+    LOGGER.debug("Resume file has been synced / renamed (new hash: %s)", current_hash)
+
+
 def write_torrent(
     filepath: Path,
+    resume_filepath: Union[Path, None],
     torrent_file: Union[dict, None],
     original_hash: str,
     rename: bool = False,
@@ -153,6 +289,7 @@ def write_torrent(
     The original file is backed up before writing.
 
     :param filepath: Path to the torrent file.
+    :param resume_filepath: Path for the .resume or .fastresume files (can be None).
     :param torrent_file: The modified deserialized torrent metadata structure,
         or None if the torrent should not be modified.
     :param original_hash: Hash of the torrent before any modification.
@@ -174,7 +311,16 @@ def write_torrent(
     filepath.write_bytes(bencode(torrent_file))
 
 
+def dir_path(path: str) -> Path:
+    """Test existence of the given directory"""
+    path = Path(path)
+    if path.is_dir():
+        return path
+    raise argparse.ArgumentTypeError(f"{path} is not a valid directory")
+
+
 def build_parser() -> argparse.ArgumentParser:
+    """Command line interface parser"""
     parser = argparse.ArgumentParser(
         description="Edit BitTorrent metadata (private flag and trackers)."
     )
@@ -201,6 +347,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--rename",
         action="store_true",
         help="Rename the torrent file if the hash has changed (if the privacy flag has been toggled)",
+    )
+
+    parser.add_argument(
+        "--resume_path",
+        nargs="?",
+        type=dir_path,
+        help="Directory of the .resume or .fastresume file(s). "
+        "Used for qBittorrent and Transmission.",
     )
 
     parser.add_argument(
@@ -261,11 +415,14 @@ def main():
     )
     for filepath in filepaths:
         torrent_file, original_hash = open_torrent(filepath)
+        resume_file, resume_filepath = open_resume_file(original_hash, args.resume_path)
 
         write_torrent(
             filepath,
+            resume_filepath,
             edit_torrent(
                 torrent_file,
+                resume_file,
                 private=private,
                 new_trackers=new_trackers,
                 old_trackers=old_trackers,
