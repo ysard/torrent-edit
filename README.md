@@ -2,6 +2,7 @@
 A small command-line tool to modify BitTorrent `.torrent` files.
 
 This tool is designed to perform simple metadata edits without recreating the torrent.
+It supports Transmission & qBittorrent resume files.
 
 ---
 
@@ -12,6 +13,7 @@ This tool is designed to perform simple metadata edits without recreating the to
 - Remove existing trackers
 - Replace the entire tracker list
 - Automatic `.bak` backup before writing
+- Synchronize `.resume` & `.fastresume` files for torrents already loaded in a client
 
 ## Installation
 
@@ -48,7 +50,8 @@ options:
   -h, --help            show this help message and exit
   --public              Remove the private flag
   --private             Set the torrent as private (disable DHT/PEX)
-  --rename              Rename the torrent file if the hash has changed (if the privacy flag has been toggled)
+  --inplace             Modify the torrent inplace even if the hash has changed instead of recreating it
+                        (if the privacy flag has been toggled)(not recommended)
   --add URL [URL ...]   Add all trackers with the provided list
   --remove URL [URL ...]
                         Remove all trackers with the provided list.
@@ -65,7 +68,7 @@ You can specify multiple files:
 $ torrent-edit *.torrent [...]
 ```
 
-- Make a torrent private
+- Make a torrent private / public
 
 ```bash
 $ torrent-edit "Mr.and.Mr.Macron's.holidays.financed.by.your.taxes.mkv.torrent" --private
@@ -73,8 +76,6 @@ $ torrent-edit "Mr.and.Mr.Macron's.holidays.financed.by.your.taxes.mkv.torrent" 
 
 This sets the private flag in the torrent metadata.
 Most BitTorrent clients will disable DHT, PEX, and LSD when the torrent is private.
-
-- Make a torrent public
 
 ```bash
 $ torrent-edit movie.torrent --public
@@ -92,10 +93,12 @@ Removes the private flag.
 > ⚠️ **Notice:**
 > When doing this, you may need to update the path to the file in your application.
 > This is because the torrent client treats it as a new pending download.
+> To AVOID this, use the `--resume_path` parameter that points to the `.resume` or `.fastresume`
+> files of Transmission or qBittorrent. The updates will be made automatically and visible
+> once the client is restarted.
 
-Use the `--rename` parameter to avoid editing the torrent in place and instead create a new file alongside it.
-This can be useful if you are working with torrents that are already active in Transmission (see later for the concerned folders).
-All new files should be added automatically when the software is restarted.
+Use the `--inplace` parameter to force editing the torrent file in place (even if the hash is modified).
+This can be useful if you are working with torrents that not already loaded in a BitTorrent client.
 
 - Add a tracker
 
@@ -137,8 +140,11 @@ This removes all existing trackers and replaces them with the provided ones.
 
 - Find the directory with the torrents used by your application, and go into it.
 
-    - For Transmission server: `/var/lib/transmission-daemon/info/torrents`
-    - For Transmission client: `~/.config/transmission/torrents/`
+    - For Transmission server: `/var/lib/transmission-daemon/info/torrents/` (torrents), `/var/lib/transmission-daemon/info/resume/` (resume files)
+    - For Transmission client: `~/.config/transmission/torrents/` (torrents), `~/.config/transmission/resume/` (resume files)
+
+    - For qBittorrent (Linux): `~/.local/share/qBittorrent/BT_backup/` (torrent & fastresume files)
+    - For qBittorrent (Windows): `%LOCALAPPDATA%/qBittorrent/BT_backup` (torrent & fastresume files)
 
 - Execute the script with your own arguments.
 
