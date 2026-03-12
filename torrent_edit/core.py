@@ -126,7 +126,7 @@ def edit_torrent(
         LOGGER.debug("Trackers don't match: do not process this torrent!")
         return None
 
-    private_flag = torrent_file["info"]["private"]
+    private_flag = torrent_file["info"].get("private", 0)
     hash_modified = False
     if private is not None and private_flag != private:
         LOGGER.debug("Toggle private attribute: %s->%s", private_flag, int(private))
