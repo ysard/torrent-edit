@@ -96,8 +96,9 @@ def edit_torrent(
         Return None if the torrent is not modified.
     """
     try:
+        # Flatten the list of lists
         torrent_list = (
-            torrent_file["announce-list"]
+            list(it.chain(*torrent_file["announce-list"]))
             if "announce-list" in torrent_file
             else [torrent_file["announce"]]
         )
@@ -114,7 +115,7 @@ def edit_torrent(
     if resume_file:
         # Merge torrent_list with trackers in the resume file (qBittorrent)
         # Yeah it's a list of list...
-        torrent_list += resume_file.get("trackers", [[]])[0]
+        torrent_list += list(it.chain(*resume_file.get("trackers", [[]])))
 
     torrent_list = set(torrent_list)
     old_trackers = set(old_trackers) if old_trackers else set()
@@ -149,20 +150,22 @@ def edit_torrent(
     if old_trackers:
         torrent_list = torrent_list - old_trackers
 
-    torrent_list = list(torrent_list)
+    LOGGER.debug("Updated trackers: %s", ", ".join(torrent_list))
+
+    # Reconstruct the final list of lists
+    torrent_list = [[tracker] for tracker in torrent_list]
 
     if not torrent_list:
-        del torrent_file["announce"]
+        if "announce" in torrent_file:
+            del torrent_file["announce"]
         # raise ValueError("Tracker list would become empty.")
     else:
-        torrent_file["announce"] = torrent_list[0]
+        torrent_file["announce"] = torrent_list[0][0]
 
     if len(torrent_list) > 1:
         torrent_file["announce-list"] = torrent_list
     elif "announce-list" in torrent_file:
         del torrent_file["announce-list"]
-
-    LOGGER.debug("Updated trackers: %s", ", ".join(torrent_list))
 
     return torrent_file
 
@@ -188,12 +191,14 @@ def copy_qb_fastresume(
     LOGGER.debug("Fastresume old trackers: %s", resume_file["trackers"])
 
     try:
-        pending_trackers = torrent_file.get("announce-list", [torrent_file["announce"]])
+        pending_trackers = torrent_file.get("announce-list", [[torrent_file["announce"]]])
     except KeyError:
+        # No multiple trackers nor announce
+        # When the list of list is empty (no trackers) it's a simple empty list (but should work anyway)
         pending_trackers = []
 
     LOGGER.debug("Fastresume pending trackers: %s", pending_trackers)
-    resume_file["trackers"] = [pending_trackers]
+    resume_file["trackers"] = pending_trackers
 
     # Save
     Path(fastresume_filepath.with_stem(current_hash)).write_bytes(bencode(resume_file))
