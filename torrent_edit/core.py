@@ -130,6 +130,9 @@ def edit_torrent(
     private_flag = torrent_file["info"].get("private", 0)
     hash_modified = False
     if private is not None and private_flag != private:
+        # WARNING: Here even we set the private flag to 0 if the torrent is public.
+        # The private flag is optional. Its explicit presence, enabled/disabled
+        # WILL modify the hash of the torrent.
         LOGGER.debug("Toggle private attribute: %s->%s", private_flag, int(private))
         torrent_file["info"]["private"] = int(private)
         hash_modified = True
