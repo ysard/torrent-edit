@@ -150,8 +150,7 @@ def edit_torrent(
         else:
             torrent_list = new_trackers
 
-    if old_trackers:
-        torrent_list = torrent_list - old_trackers
+    torrent_list -= old_trackers
 
     LOGGER.debug("Updated trackers: %s", ", ".join(torrent_list))
 
