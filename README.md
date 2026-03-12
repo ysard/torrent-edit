@@ -1,3 +1,7 @@
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ysard/torrent-edit)](https://github.com/ysard/torrent-edit/releases/latest/)
+[![version on pypi](https://img.shields.io/pypi/v/torrent-edit.svg)](https://pypi.python.org/pypi/torrent-edit)
+[![python versions on pypi](https://img.shields.io/pypi/pyversions/torrent-edit)](https://pypi.python.org/pypi/torrent-edit)
+[![license](https://img.shields.io/pypi/l/torrent-edit.svg)](https://github.com/ysard/torrent-edit/blob/main/LICENSE)
 
 A small command-line tool to modify BitTorrent `.torrent` files.
 
