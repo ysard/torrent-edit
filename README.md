@@ -56,6 +56,8 @@ options:
   --private             Set the torrent as private (disable DHT/PEX)
   --inplace             Modify the torrent inplace even if the hash has changed instead of recreating it
                         (if the privacy flag has been toggled)(not recommended)
+  --resume_path [RESUME_PATH]
+                        Directory of the .resume or .fastresume file(s). Used for qBittorrent and Transmission.
   --add URL [URL ...]   Add all trackers with the provided list
   --remove URL [URL ...]
                         Remove all trackers with the provided list.
