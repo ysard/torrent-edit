@@ -137,7 +137,7 @@ def edit_torrent(
         torrent_file["info"]["private"] = int(private)
         hash_modified = True
 
-    if all(param for param in (new_trackers, old_trackers) if not param):
+    if not new_trackers and not old_trackers:
         # Nothing to do about trackers
         if hash_modified:
             return torrent_file
