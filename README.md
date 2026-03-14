@@ -10,6 +10,26 @@ It supports Transmission & qBittorrent resume files.
 
 ---
 
+## TL;DR: Migration from yggtorrent
+
+Example for qBittorrent + Windows (adapt paths for Transmission or GNU/Linux, see further):
+
+```bash
+$ torrent-edit %LOCALAPPDATA%/qBittorrent/BT_backup/*.torrent \
+    --remove http://connect.maxp2p.org:8080/<your_announce>/announce \
+    --replace \
+    https://tracker1/announce \
+    https://tracker2/announce \
+    --resume_path %LOCALAPPDATA%/qBittorrent/BT_backup/
+```
+
+`--remove` allows to filter the torrents, keeping only the ones that match the old tracker.
+You can add it back to the list using `--replace` or `--add`.
+The `--resume_path` option updates the `.fastresume` or `.resume` files
+(these are the files that keep the list of trackers up to date or just statistics and download paths,
+in qBittorrent or Transmission respectively).
+
+
 ## Features
 
 - Toggle torrent **private/public** flag
